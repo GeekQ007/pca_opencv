@@ -32,4 +32,4 @@ link_directories(thirdparty/opencv/lib)
 add_executable(${PROJECT_NAME} ${DIR_SRCS} ${DIR_SUB_SRCS})
 
 # 链接第三方库
-target_link_libraries(${PROJECT_NAME} -lopencv_core -lopencv_highgui -lopencv_imgproc)
+target_link_libraries(${PROJECT_NAME} -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_imgcodecs)
