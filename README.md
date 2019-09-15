@@ -2,7 +2,6 @@
 
 ## 项目结构说明
 
-.
 ├── src
 ├── build
 ├── CMakeLists.txt
@@ -10,8 +9,6 @@
 ├── README.md
 ├── include
 └── thirdParty
-
-```
 
 + src文件夹：存放着一些基础的源文件，不依赖于项目中的其它文件；
 
