@@ -1,5 +1,5 @@
 # CMake 最低的版本要求
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.0)
 
 # 定义项目名称变量PROJECT_NAME, 默认值为demo
 set(PROJECT_NAME demo)
@@ -8,7 +8,7 @@ set(PROJECT_NAME demo)
 project(${PROJECT_NAME})
 
 # 设置C++的版本
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 # 指定模式
 set(CMAKE_BUILD_TYPE "Debug")
