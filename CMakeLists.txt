@@ -8,7 +8,7 @@ set(PROJECT_NAME demo)
 project(${PROJECT_NAME})
 
 # 设置C++的版本
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 # 指定模式
 set(CMAKE_BUILD_TYPE "Debug")
@@ -23,10 +23,10 @@ add_subdirectory(src DIR_SUB_SRCS)
 
 # 包含头文件目录
 include_directories(include)
-include_directories(thirdparty/opencv/include)
+include_directories(/usr/local/include/opencv4)
 
 # 第三方链接库的目录
-link_directories(thirdparty/opencv/lib)
+link_directories(/usr/local/lib)
 
 # 指定生成目标
 add_executable(${PROJECT_NAME} ${DIR_SRCS} ${DIR_SUB_SRCS})

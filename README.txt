@@ -1,9 +1,9 @@
 Project pca_opencv
 
+gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0
 基于opencv4.1.1（项目已包含），依赖的第三方库安装方式
-必须 
+
 sudo apt-get install build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev
-非必须
 sudo apt-get install python-dev python-numpy python3-dev python3-numpy
 sudo apt-get install libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libjasper-dev libdc1394-22-dev
 
