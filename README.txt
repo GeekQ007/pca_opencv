@@ -6,6 +6,8 @@ sudo apt-get install build-essential cmake git libgtk2.0-dev pkg-config libavcod
 非必须
 sudo apt-get install python-dev python-numpy python3-dev python3-numpy
 sudo apt-get install libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libjasper-dev libdc1394-22-dev
+
+
 项目结构说明
 
 ├── src
