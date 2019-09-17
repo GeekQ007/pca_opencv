@@ -1,355 +1,371 @@
-#include <stdio.h>
-#include <string.h>
-#include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-#include <time.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <fstream>
+#include <map>
+#include <sstream>
 #include <iostream>
+#include <string>
 
 using namespace cv;
 using namespace std;
 
-////定义几个重要的全局变量
-Mat *faceImgArr = 0;            // 指向训练人脸和测试人脸的指针（在学习和识别阶段指向不同）
-Mat *personNumTruthMat = 0;     // 人脸图像的ID号
-int nTrainFaces = 0;            // 训练图像的数目
-int nEigens = 0;                // 自己取的主要特征值数目
-Mat pAvgTrainImg = NULL;           // 训练人脸数据的平均值
-Mat *eigenVectArr = 0;          // 投影矩阵，也即主特征向量
-Mat *eigenValMat = 0;           // 特征值
-Mat *projectedTrainFaceMat = 0; // 训练图像的投影
-
-//// 函数原型
-void learn();
-void recognize();
-void doPCA();
-void storeTrainingData();
-int loadTrainingData(Mat *pTrainPersonNumMat);
-int findNearestNeighbor(float *projectedTestFace);
-int loadFaceImgArray(char *filename);
-void printUsage();
-
-//主函数，主要包括学习和识别两个阶段，需要运行两次，通过命令行传入的参数区分
-int main()
+const double u = 0.01f;
+const double v = 0.01f;   //the global parameter
+const int MNeighbor = 40; //the M nearest neighbors
+// Number of components to keep for the PCA
+const int num_components = 20;
+//the M neighbor mats
+vector<Mat> MneighborMat;
+//the class index of M neighbor mats
+vector<int> MneighborIndex;
+//the number of object which used to training
+const int Training_ObjectNum = 5;
+//the number of image that each object used
+const int Training_ImageNum = 7;
+//the number of object used to testing
+const int Test_ObjectNum = 40;
+//the image number
+const int Test_ImageNum = 3;
+// Normalizes a given image into a value range between 0 and 255.
+Mat norm_0_255(const Mat &src)
 {
-    //learn();
-    recognize();
+    // Create and return normalized image:
+    Mat dst;
+    switch (src.channels())
+    {
+    case 1:
+        cv::normalize(src, dst, 0, 255, NORM_MINMAX, CV_8UC1);
+        break;
+    case 3:
+        cv::normalize(src, dst, 0, 255, NORM_MINMAX, CV_8UC3);
+        break;
+    default:
+        src.copyTo(dst);
+        break;
+    }
+    return dst;
 }
 
-//学习阶段代码
-void learn()
+// Converts the images given in src into a row matrix.
+Mat asRowMatrix(const vector<Mat> &src, int rtype, double alpha = 1, double beta = 0)
 {
-    cout << "开始训练过程" << endl;
-
-    //开始计时
-    clock_t start, finish;
-    double duration;
-    start = clock();
-    int i, offset;
-
-    //加载训练图像集
-    nTrainFaces = loadFaceImgArray("train.txt");
-    if (nTrainFaces < 2)
+    // Number of samples:
+    size_t n = src.size();
+    // Return empty matrix if no matrices given:
+    if (n == 0)
+        return Mat();
+    // dimensionality of (reshaped) samples
+    size_t d = src[0].total();
+    // Create resulting data matrix:
+    Mat data(n, d, rtype);
+    // Now copy data:
+    for (int i = 0; i < n; i++)
     {
-        fprintf(stderr,
-                "Need 2 or more training faces\n"
-                "Input file contains only %d\n",
-                nTrainFaces);
-        return;
-    }
-
-    // 进行主成分分析
-    doPCA();
-
-    //将训练图集投影到子空间中
-    projectedTrainFaceMat = Mat(nTrainFaces, nEigens, CV_32FC1);
-    offset = projectedTrainFaceMat->step / sizeof(float);
-    for (i = 0; i < nTrainFaces; i++)
-    {
-        //int offset = i * nEigens;
-        cvEigenDecomposite(
-            faceImgArr[i],
-            nEigens,
-            eigenVectArr,
-            0, 0,
-            pAvgTrainImg,
-            //projectedTrainFaceMat->data.fl + i*nEigens);
-            projectedTrainFaceMat->data + i * offset);
-    }
-
-    //将训练阶段得到的特征值，投影矩阵等数据存为.xml文件，以备测试时使用
-    storeTrainingData();
-
-    //结束计时
-    finish = clock();
-    duration = (double)(finish - start) / CLOCKS_PER_SEC;
-    cout << "训练过程结束,共耗时：" << duration << "秒" << endl;
-}
-
-//识别阶段代码
-void recognize()
-{
-    cout << "开始识别过程" << endl;
-
-    //开始计时
-    clock_t start, finish;
-    double duration;
-    start = clock();
-
-    // 测试人脸数
-    int i, nTestFaces = 0;
-
-    // 训练阶段的人脸数
-    Mat *trainPersonNumMat = 0;
-    float *projectedTestFace = 0;
-
-    // 加载测试图像，并返回测试人脸数
-    nTestFaces = loadFaceImgArray("test.txt");
-    printf("%d test faces loaded\n", nTestFaces);
-
-    // 加载保存在.xml文件中的训练结果
-    if (!loadTrainingData(&trainPersonNumMat))
-        return;
-
-    projectedTestFace = (float *)cvAlloc(nEigens * sizeof(float));
-    for (i = 0; i < nTestFaces; i++)
-    {
-        int iNearest, nearest, truth;
-
-        //将测试图像投影到子空间中
-        cvEigenDecomposite(
-            faceImgArr[i],
-            nEigens,
-            eigenVectArr,
-            0, 0,
-            pAvgTrainImg,
-            projectedTestFace);
-
-        iNearest = findNearestNeighbor(projectedTestFace);
-        truth = personNumTruthMat->data.i[i];
-        nearest = trainPersonNumMat->data.i[iNearest];
-
-        printf("nearest = %d, Truth = %d\n", nearest, truth);
-    }
-
-    //结束计时
-    finish = clock();
-    duration = (double)(finish - start) / CLOCKS_PER_SEC;
-    cout << "识别过程结束,共耗时：" << duration << "秒" << endl;
-}
-
-//加载保存过的训练结果
-int loadTrainingData(Mat **pTrainPersonNumMat)
-{
-    FileStorage *fileStorage;
-    int i;
-
-    fileStorage = cvOpenFileStorage("facedata.xml", 0, CV_STORAGE_READ);
-    if (!fileStorage)
-    {
-        fprintf(stderr, "Can't open facedata.xml\n");
-        return 0;
-    }
-
-    nEigens = cvReadIntByName(fileStorage, 0, "nEigens", 0);
-    nTrainFaces = cvReadIntByName(fileStorage, 0, "nTrainFaces", 0);
-    *pTrainPersonNumMat = (Mat *)cvReadByName(fileStorage, 0, "trainPersonNumMat", 0);
-    eigenValMat = (Mat *)cvReadByName(fileStorage, 0, "eigenValMat", 0);
-    projectedTrainFaceMat = (Mat *)cvReadByName(fileStorage, 0, "projectedTrainFaceMat", 0);
-    pAvgTrainImg = (Mat)cvReadByName(fileStorage, 0, "avgTrainImg", 0);
-    eigenVectArr = (Mat *)cvAlloc(nTrainFaces * sizeof(Mat));
-    for (i = 0; i < nEigens; i++)
-    {
-        char varname[200];
-        sprintf(varname, "eigenVect_%d", i);
-        eigenVectArr[i] = (Mat)cvReadByName(fileStorage, 0, varname, 0);
-    }
-
-    cvReleaseFileStorage(&fileStorage);
-
-    return 1;
-}
-
-//存储训练结果
-void storeTrainingData()
-{
-    FileStorage *fileStorage;
-    int i;
-
-    fileStorage = cvOpenFileStorage("facedata.xml", 0, CV_STORAGE_WRITE);
-
-    //存储特征值，投影矩阵，平均矩阵等训练结果
-    cvWriteInt(fileStorage, "nEigens", nEigens);
-    cvWriteInt(fileStorage, "nTrainFaces", nTrainFaces);
-    cvWrite(fileStorage, "trainPersonNumMat", personNumTruthMat, cvAttrList(0, 0));
-    cvWrite(fileStorage, "eigenValMat", eigenValMat, cvAttrList(0, 0));
-    cvWrite(fileStorage, "projectedTrainFaceMat", projectedTrainFaceMat, cvAttrList(0, 0));
-    cvWrite(fileStorage, "avgTrainImg", pAvgTrainImg, cvAttrList(0, 0));
-    for (i = 0; i < nEigens; i++)
-    {
-        char varname[200];
-        sprintf(varname, "eigenVect_%d", i);
-        cvWrite(fileStorage, varname, eigenVectArr[i], cvAttrList(0, 0));
-        cvNormalize(eigenVectArr[i], eigenVectArr[i], 255, 0, CV_L2, 0);
-        cvNamedWindow("demo", CV_WINDOW_AUTOSIZE);
-        cvShowImage("demo", eigenVectArr[i]);
-        cvWaitKey(100);
-    }
-    cvNormalize(pAvgTrainImg, pAvgTrainImg, 255, 0, CV_L1, 0);
-    cvNamedWindow("demo", CV_WINDOW_AUTOSIZE);
-    cvShowImage("demo", pAvgTrainImg);
-    cvWaitKey(100);
-
-    cvReleaseFileStorage(&fileStorage);
-}
-
-//寻找最接近的图像
-int findNearestNeighbor(float *projectedTestFace)
-{
-
-    //定义最小距离，并初始化为无穷大
-    double leastDistSq = DBL_MAX, accuracy;
-    int i, iTrain, iNearest = 0;
-    double a[10];
-
-    for (iTrain = 0; iTrain < nTrainFaces; iTrain++)
-    {
-        double distSq = 0;
-
-        for (i = 0; i < nEigens; i++)
+        //
+        if (src[i].empty())
         {
-            float d_i =
-                projectedTestFace[i] -
-                projectedTrainFaceMat->data.fl[iTrain * nEigens + i];
-
-            // Mahalanobis算法计算的距离
-            //distSq += d_i*d_i; // Euclidean算法计算的距离
-            distSq += d_i * d_i / eigenValMat->data.fl[i];
+            string error_message = format("Image number %d was empty, please check your input data.", i);
+            cout << error_message << endl;
         }
-        a[iTrain] = distSq;
-
-        if (distSq < leastDistSq)
+        // Make sure data can be reshaped, throw a meaningful exception if not!
+        if (src[i].total() != d)
         {
-            leastDistSq = distSq;
-            iNearest = iTrain;
+            string error_message = format("Wrong number of elements in matrix #%d! Expected %d was %d.", i, d, src[i].total());
+            cout << error_message << endl;
         }
-    }
-    //求阈值
-    double max = a[0], threshold;
-    int j;
-    for (j = 1; j < 10; j++)
-    {
-        if (max < a[j])
-            max = a[j];
+        // Get a hold of the current row:
+        Mat xi = data.row(i);
+        // Make reshape happy by cloning for non-continuous matrices:
+        if (src[i].isContinuous())
+        {
+            src[i].reshape(1, 1).convertTo(xi, rtype, alpha, beta);
+        }
         else
-            max = max;
-    }
-    threshold = max / 2;
-    //求相似率
-    accuracy = 1 - leastDistSq / threshold;
-    cout << "相似率为:" << accuracy << endl;
-    return iNearest;
-}
-
-//主成分分析
-void doPCA()
-{
-    int i;
-
-    //终止算法准则
-    CvTermCriteria calcLimit;
-
-    //构造图像
-    CvSize faceImgSize;
-
-    // 自己设置主特征值个数
-    nEigens = nTrainFaces - 1;
-
-    //分配特征向量存储空间
-    faceImgSize.width = faceImgArr[0]->width;
-    faceImgSize.height = faceImgArr[0]->height;
-
-    //分配个数为主特征值个数
-    eigenVectArr = (IplImage **)cvAlloc(sizeof(IplImage *) * nEigens);
-    for (i = 0; i < nEigens; i++)
-        eigenVectArr[i] = cvCreateImage(faceImgSize, IPL_DEPTH_32F, 1);
-
-    //分配主特征值存储空间
-    eigenValMat = cvCreateMat(1, nEigens, CV_32FC1);
-
-    // 分配平均图像存储空间
-    pAvgTrainImg = cvCreateImage(faceImgSize, IPL_DEPTH_32F, 1);
-
-    // 设定PCA分析结束条件
-    calcLimit = cvTermCriteria(CV_TERMCRIT_ITER, nEigens, 1);
-
-    // 计算平均图像，特征值，特征向量
-    cvCalcEigenObjects(
-        nTrainFaces,
-        (void *)faceImgArr,
-        (void *)eigenVectArr,
-        CV_EIGOBJ_NO_CALLBACK,
-        0,
-        0,
-        &calcLimit,
-        pAvgTrainImg,
-        eigenValMat->data.fl);
-
-    //归一化大小
-    cvNormalize(eigenValMat, eigenValMat, 1, 0, CV_L1, 0);
-}
-
-//加载txt文件的列举的图像
-int loadFaceImgArray(char *filename)
-{
-    FILE *imgListFile = 0;
-    char imgFilename[512];
-    int iFace, nFaces = 0;
-
-    if (!(imgListFile = fopen(filename, "r")))
-    {
-        fprintf(stderr, "Can\'t open file %s\n", filename);
-        return 0;
-    }
-
-    // 统计人脸数
-    while (fgets(imgFilename, 512, imgListFile))
-        ++nFaces;
-    rewind(imgListFile);
-
-    // 分配人脸图像存储空间和人脸ID号存储空间
-    faceImgArr = (Mat *)cvAlloc(nFaces * sizeof(Mat));
-    personNumTruthMat = cvCreateMat(1, nFaces, CV_32SC1);
-
-    for (iFace = 0; iFace < nFaces; iFace++)
-    {
-        // 从文件中读取序号和人脸名称
-        fscanf(imgListFile,
-               "%d %s", personNumTruthMat->data.i + iFace, imgFilename);
-
-        // 加载人脸图像
-        faceImgArr[iFace] = cvLoadImage(imgFilename, CV_LOAD_IMAGE_GRAYSCALE);
-
-        if (!faceImgArr[iFace])
         {
-            fprintf(stderr, "Can\'t load image from %s\n", imgFilename);
-            return 0;
+            src[i].clone().reshape(1, 1).convertTo(xi, rtype, alpha, beta);
         }
-        cvNamedWindow("demo", CV_WINDOW_AUTOSIZE);
-        cvShowImage("demo", faceImgArr[iFace]);
-        cvWaitKey(100);
     }
-
-    fclose(imgListFile);
-
-    return nFaces;
+    return data;
 }
+
+//convert int to string
+string Int_String(int index)
+{
+    stringstream ss;
+    ss << index;
+    return ss.str();
+}
+
+////show the element of mat(used to test code)
+//void showMat(Mat RainMat)
+//{
+//    for (int i=0;i<RainMat.rows;i++)
+//    {
+//        for (int j=0;j<RainMat.cols;j++)
+//        {
+//            cout<<RainMat.at<float>(i,j)<<"  ";
+//        }
+//        cout<<endl;
+//    }
+//}
 
 //
-void printUsage()
+////show the element of vector
+//void showVector(vector<int> index)
+//{
+//    for (int i=0;i<index.size();i++)
+//    {
+//        cout<<index[i]<<endl;
+//    }
+//}
+//
+
+//void showMatVector(vector<Mat> neighbor)
+//{
+//    for (int e=0;e<neighbor.size();e++)
+//    {
+//        showMat(neighbor[e]);
+//    }
+//}
+//Training function
+void Trainging()
 {
-    printf("Usage: eigenface <command>\n",
-           "  Valid commands are\n"
-           "    train\n"
-           "    test\n");
+    // Holds some training images:
+    vector<Mat> db;
+    // This is the path to where I stored the images, yours is different!
+    for (int i = 1; i <= Training_ObjectNum; i++)
+    {
+        for (int j = 1; j <= Training_ImageNum; j++)
+        {
+            string filename = "s" + Int_String(i) + "/" + Int_String(j) + ".jpg";
+            db.push_back(imread(filename, IMREAD_GRAYSCALE));
+        }
+    }
+    // Build a matrix with the observations in row:
+    Mat data = asRowMatrix(db, CV_32FC1);
+    // Perform a PCA:
+    PCA pca(data, Mat(), 0, num_components);
+    // And copy the PCA results:
+    Mat mean = pca.mean.clone();
+    Mat eigenvalues = pca.eigenvalues.clone();
+    Mat eigenvectors = pca.eigenvectors.clone();
+    // The mean face:
+    //imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
+    // The first three eigenfaces:
+    //imshow("pc1", norm_0_255(pca.eigenvectors.row(0)).reshape(1, db[0].rows));
+    //imshow("pc2", norm_0_255(pca.eigenvectors.row(1)).reshape(1, db[0].rows));
+    //imshow("pc3", norm_0_255(pca.eigenvectors.row(2)).reshape(1, db[0].rows));
+    ////get and save the training image information which decreased on dimensionality
+    Mat mat_trans_eigen;
+    Mat temp_data = data.clone();
+    Mat temp_eigenvector = pca.eigenvectors.clone();
+    gemm(temp_data, temp_eigenvector, 1, NULL, 0, mat_trans_eigen, GEMM_2_T);
+    //save the eigenvectors
+    FileStorage fs("./eigenvector.xml", FileStorage::WRITE);
+    fs << "eigenvector" << eigenvectors;
+    fs << "TrainingSamples" << mat_trans_eigen;
+    fs.release();
+}
+//Line combination of test sample used by training samples
+//parameter:y stand for the test sample column vector;
+//x stand for the training samples matrix
+Mat LineCombination(Mat y, Mat x)
+{
+    //the number of training samples
+    size_t col = x.cols;
+    //the result mat
+    Mat result = Mat(col, 1, CV_32FC1);
+    //the transposition of x and also work as a temp matrix
+    Mat trans_x_mat = Mat(col, col, CV_32FC1);
+    //construct the identity matrix
+    Mat I = Mat::ones(col, col, CV_32FC1);
+    //solve the Y=XA
+    //result=x.inv(DECOMP_SVD);
+    //result*=y;
+    Mat temp = (x.t() * x + u * I);
+    Mat temp_one = temp.inv(DECOMP_SVD);
+    Mat temp_two = x.t() * y;
+    result = temp_one * temp_two;
+    return result;
+}
+//Error test
+//parameter:y stand for the test sample column vector;
+//x stand for the training samples matrix
+//coeff stand for the coefficient of training samples
+void ErrorTest(Mat y, Mat x, Mat coeff)
+{
+    //the array store the coefficient
+    map<double, int> Efficient;
+    //compute the error
+    for (int i = 0; i < x.cols; i++)
+    {
+        Mat temp = x.col(i);
+        double coefficient = coeff.at<float>(i, 0);
+        temp = coefficient * temp;
+        double e = norm((y - temp), NORM_L2);
+        Efficient[e] = i; //insert a new element
+    }
+    //select the minimum w col as the w nearest neighbors
+    map<double, int>::const_iterator map_it = Efficient.begin();
+    int num = 0;
+    //the map could sorted by the key one
+    while (map_it != Efficient.end() && num < MNeighbor)
+    {
+        MneighborMat.push_back(x.col(map_it->second));
+        MneighborIndex.push_back(map_it->second);
+        ++map_it;
+        ++num;
+    }
+    //return MneighborMat;
+}
+//error test of two step
+//parameter:MneighborMat store the class information of M nearest neighbor samples
+int ErrorTest_Two(Mat y, Mat x, Mat coeff)
+{
+    int result;
+    bool flag = true;
+    double minimumerror;
+    //
+    map<int, vector<Mat>> ErrorResult;
+    //count the class of M neighbor
+    for (int i = 0; i < x.cols; i++)
+    {
+        //compare
+        //Mat temp=x.col(i)==MneighborMat[i];
+        //showMat(temp);
+        //if (temp.at<float>(0,0)==255)
+        //{
+        int classinf = MneighborIndex[i];
+        double coefficient = coeff.at<float>(i, 0);
+        Mat temp = x.col(i);
+        temp = coefficient * temp;
+        ErrorResult[classinf / Training_ImageNum].push_back(temp);
+        //}
+    }
+    //
+    map<int, vector<Mat>>::const_iterator map_it = ErrorResult.begin();
+    while (map_it != ErrorResult.end())
+    {
+        vector<Mat> temp_mat = map_it->second;
+        int num = temp_mat.size();
+        Mat temp_one;
+        temp_one = Mat::zeros(temp_mat[0].rows, temp_mat[0].cols, CV_32FC1);
+        while (num > 0)
+        {
+            temp_one += temp_mat[num - 1];
+            num--;
+        }
+        double e = norm((y - temp_one), NORM_L2);
+        if (flag)
+        {
+            minimumerror = e;
+            result = map_it->first + 1;
+            flag = false;
+        }
+        if (e < minimumerror)
+        {
+            minimumerror = e;
+            result = map_it->first + 1;
+        }
+        ++map_it;
+    }
+    return result;
+}
+//testing function
+//parameter:y stand for the test sample column vector;
+//x stand for the training samples matrix
+int testing(Mat x, Mat y)
+{
+    // the class that test sample belongs to
+    int classNum;
+    //the first step: get the M nearest neighbors
+    Mat coffecient = LineCombination(y.t(), x.t());
+    //cout<<"the first step coffecient"<<endl;
+    //showMat(coffecient);
+    //map<Mat,int> MneighborMat=ErrorTest(y,x,coffecient);
+    ErrorTest(y.t(), x.t(), coffecient);
+    //cout<<"the M neighbor index"<<endl;
+    //showVector(MneighborIndex);
+    //cout<<"the M neighbor mats"<<endl;
+    //showMatVector(MneighborMat);
+    //the second step:
+    //construct the W nearest neighbors mat
+    int row = x.cols; //should be careful
+    Mat temp(row, MNeighbor, CV_32FC1);
+    for (int i = 0; i < MneighborMat.size(); i++)
+    {
+        Mat temp_x = temp.col(i);
+        if (MneighborMat[i].isContinuous())
+        {
+            MneighborMat[i].convertTo(temp_x, CV_32FC1, 1, 0);
+        }
+        else
+        {
+            MneighborMat[i].clone().convertTo(temp_x, CV_32FC1, 1, 0);
+        }
+    }
+    //cout<<"the second step mat"<<endl;
+    //showMat(temp);
+    Mat coffecient_two = LineCombination(y.t(), temp);
+    //cout<<"the second step coffecient"<<endl;
+    //showMat(coffecient_two);
+    classNum = ErrorTest_Two(y.t(), temp, coffecient_two);
+    return classNum;
+}
+
+int main(int argc, const char *argv[])
+{
+    //the number which test true
+    int TrueNum = 0;
+    //the Total sample which be tested
+    int TotalNum = Test_ObjectNum * Test_ImageNum;
+    //if there is the eigenvector.xml, it means we have got the training data and go to the testing stage directly;
+    FileStorage fs("eigenvector.xml", FileStorage::READ);
+    if (fs.isOpened())
+    {
+        //if the eigenvector.xml file exist,read the mat data
+        Mat mat_eigenvector;
+        fs["eigenvector"] >> mat_eigenvector;
+        Mat mat_Training;
+        fs["TrainingSamples"] >> mat_Training;
+        for (int i = 1; i <= Test_ObjectNum; i++)
+        {
+            int ClassTestNum = 0;
+            for (int j = Training_ImageNum + 1; j <= Training_ImageNum + Test_ImageNum; j++)
+            {
+                string filename = "s" + Int_String(i) + "/" + Int_String(j) + ".jpg";
+                Mat TestSample = imread(filename, IMREAD_GRAYSCALE);
+                Mat TestSample_Row;
+
+                TestSample.reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+
+                Mat De_deminsion_test;
+                gemm(TestSample_Row, mat_eigenvector, 1, NULL, 0, De_deminsion_test, GEMM_2_T); // get the test sample which decrease the dimensionality
+                //cout<<"the test sample"<<endl;
+                //showMat(De_deminsion_test.t());
+                //cout<<"the training samples"<<endl;
+                //showMat(mat_Training);
+                int result = testing(mat_Training, De_deminsion_test);
+                //cout<<"the result is"<<result<<endl;
+                if (result == i)
+                {
+                    TrueNum++;
+                    ClassTestNum++;
+                }
+                MneighborIndex.clear();
+                MneighborMat.clear(); //及时清除空间
+            }
+            cout << "第" << Int_String(i) << "类测试正确的图片数:  " << Int_String(ClassTestNum) << endl;
+        }
+        fs.release();
+    }
+    else
+
+    {
+        Trainging();
+    }
+    // Show the images:
+    //waitKey(0);
+    // Success!
+    return 0;
 }

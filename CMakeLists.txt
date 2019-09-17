@@ -19,7 +19,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 set(DIR_SRCS main.cpp)
 
 # 添加子目录(工作目录的次一级子目录)
-add_subdirectory(src DIR_SUB_SRCS)
+add_subdirectory(src)
 
 # 包含头文件目录
 include_directories(include)
@@ -29,7 +29,7 @@ include_directories(/usr/local/include/opencv4)
 link_directories(/usr/local/lib)
 
 # 指定生成目标
-add_executable(${PROJECT_NAME} ${DIR_SRCS} ${DIR_SUB_SRCS})
+add_executable(${PROJECT_NAME} ${DIR_SRCS})
 
 # 链接第三方库
 target_link_libraries(${PROJECT_NAME} -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_imgcodecs)
