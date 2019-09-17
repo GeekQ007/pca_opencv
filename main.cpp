@@ -13,7 +13,7 @@ const double u = 0.01f;
 const double v = 0.01f;   //the global parameter
 const int MNeighbor = 40; //the M nearest neighbors
 // Number of components to keep for the PCA
-const int num_components = 20;
+const int num_components = 100;
 //the M neighbor mats
 vector<Mat> MneighborMat;
 //the class index of M neighbor mats
@@ -21,11 +21,11 @@ vector<int> MneighborIndex;
 //the number of object which used to training
 const int Training_ObjectNum = 5;
 //the number of image that each object used
-const int Training_ImageNum = 7;
+const int Training_ImageNum = 20;
 //the number of object used to testing
-const int Test_ObjectNum = 40;
+const int Test_ObjectNum = 5;
 //the image number
-const int Test_ImageNum = 3;
+const int Test_ImageNum = 20;
 // Normalizes a given image into a value range between 0 and 255.
 Mat norm_0_255(const Mat &src)
 {
@@ -331,13 +331,19 @@ int main(int argc, const char *argv[])
         for (int i = 1; i <= Test_ObjectNum; i++)
         {
             int ClassTestNum = 0;
-            for (int j = Training_ImageNum + 1; j <= Training_ImageNum + Test_ImageNum; j++)
+            for (int j = 1; j <= Test_ImageNum; j++)
             {
                 string filename = "s" + Int_String(i) + "/" + Int_String(j) + ".jpg";
                 Mat TestSample = imread(filename, IMREAD_GRAYSCALE);
                 Mat TestSample_Row;
-
-                TestSample.reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+                if (TestSample.isContinuous())
+                {
+                    TestSample.reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+                }
+                else
+                {
+                    TestSample.clone().reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+                }
 
                 Mat De_deminsion_test;
                 gemm(TestSample_Row, mat_eigenvector, 1, NULL, 0, De_deminsion_test, GEMM_2_T); // get the test sample which decrease the dimensionality
