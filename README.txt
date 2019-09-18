@@ -13,6 +13,8 @@ sudo apt-get install libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libja
 ├── .vscode
 ├── include
 ├── src
+├── build 
+├── src
 ├── CMakeLists.txt
 ├── main.cpp
 └── README.md
@@ -20,6 +22,8 @@ sudo apt-get install libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libja
 include文件夹： 是用于存放头文件;
 
 src文件夹：存放着一些基础的源文件，不依赖于项目中的其它文件；
+
+build文件夹：存放编译出的文件以及图片库，github项目中不包含，需要自己创建，之后运行在该路径下执行cmake .. 和 make动作；
 
 CMakeLists.txt: 是整个项目的编译规则；
 

@@ -13,7 +13,7 @@ const double u = 0.01f;
 const double v = 0.01f;   //the global parameter
 const int MNeighbor = 40; //the M nearest neighbors
 // Number of components to keep for the PCA
-const int num_components = 100;
+const int num_components = 10;
 //the M neighbor mats
 vector<Mat> MneighborMat;
 //the class index of M neighbor mats
@@ -21,11 +21,11 @@ vector<int> MneighborIndex;
 //the number of object which used to training
 const int Training_ObjectNum = 5;
 //the number of image that each object used
-const int Training_ImageNum = 20;
+const int Training_ImageNum = 10;
 //the number of object used to testing
 const int Test_ObjectNum = 5;
 //the image number
-const int Test_ImageNum = 20;
+const int Test_ImageNum = 10;
 // Normalizes a given image into a value range between 0 and 255.
 Mat norm_0_255(const Mat &src)
 {
@@ -159,7 +159,7 @@ void Trainging()
     Mat mat_trans_eigen;
     Mat temp_data = data.clone();
     Mat temp_eigenvector = pca.eigenvectors.clone();
-    gemm(temp_data, temp_eigenvector, 1, NULL, 0, mat_trans_eigen, GEMM_2_T);
+    gemm(temp_data, temp_eigenvector, 1, Mat(), 0, mat_trans_eigen, GEMM_1_T);
     //save the eigenvectors
     FileStorage fs("./eigenvector.xml", FileStorage::WRITE);
     fs << "eigenvector" << eigenvectors;
@@ -319,7 +319,8 @@ int main(int argc, const char *argv[])
     int TrueNum = 0;
     //the Total sample which be tested
     int TotalNum = Test_ObjectNum * Test_ImageNum;
-    //if there is the eigenvector.xml, it means we have got the training data and go to the testing stage directly;
+    //if there is the eigenvector.xml, it means we have got the training data and
+    // go to the testing stage directly;
     FileStorage fs("eigenvector.xml", FileStorage::READ);
     if (fs.isOpened())
     {
@@ -333,20 +334,23 @@ int main(int argc, const char *argv[])
             int ClassTestNum = 0;
             for (int j = 1; j <= Test_ImageNum; j++)
             {
-                string filename = "s" + Int_String(i) + "/" + Int_String(j) + ".jpg";
+                string filename = "s" + Int_String(i) + "/" + Int_String(j+10) + ".jpg";
                 Mat TestSample = imread(filename, IMREAD_GRAYSCALE);
                 Mat TestSample_Row;
                 if (TestSample.isContinuous())
                 {
-                    TestSample.reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+                    //convert to row mat
+                    TestSample.reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0);
                 }
                 else
                 {
-                    TestSample.clone().reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0); //convert to row mat
+                    //convert to row mat
+                    TestSample.clone().reshape(1, 1).convertTo(TestSample_Row, CV_32FC1, 1, 0);
                 }
 
                 Mat De_deminsion_test;
-                gemm(TestSample_Row, mat_eigenvector, 1, NULL, 0, De_deminsion_test, GEMM_2_T); // get the test sample which decrease the dimensionality
+                // get the test sample which decrease the dimensionality
+                gemm(TestSample_Row, mat_eigenvector, 1, Mat(), 0, De_deminsion_test, GEMM_1_T);
                 //cout<<"the test sample"<<endl;
                 //showMat(De_deminsion_test.t());
                 //cout<<"the training samples"<<endl;
@@ -361,9 +365,11 @@ int main(int argc, const char *argv[])
                 MneighborIndex.clear();
                 MneighborMat.clear(); //及时清除空间
             }
-            cout << "第" << Int_String(i) << "类测试正确的图片数:  " << Int_String(ClassTestNum) << endl;
+            cout << "第" << Int_String(i) << "类测试正确的图片数:  " << Int_String(ClassTestNum)+"  "
+                 << ClassTestNum / Test_ImageNum << endl;
         }
         fs.release();
+        cout << "总的测试正确率: " << TrueNum / TotalNum << endl;
     }
     else
 
