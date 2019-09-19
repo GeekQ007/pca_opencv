@@ -3,7 +3,9 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
                 "/usr/local/include/opencv4",
                 "/usr/local/opencv-4.1.1/modules/"
             ],

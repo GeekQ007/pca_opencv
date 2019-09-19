@@ -18,8 +18,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 # 当前目录下除了测试文件外所有的源文件的名称保存到 DIR_SRCS 变量
 set(DIR_SRCS main.cpp)
 
-# 添加子目录(工作目录的次一级子目录)
-# add_subdirectory(src)
+# 添加包含源文件的子目录(工作目录的次一级子目录)
+aux_source_directory(src)
 
 # 包含头文件目录
 include_directories(include)

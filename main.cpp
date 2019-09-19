@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include "unity.hpp"
 
 using namespace cv;
 using namespace std;
@@ -96,37 +97,6 @@ string Int_String(int index)
     return ss.str();
 }
 
-////show the element of mat(used to test code)
-//void showMat(Mat RainMat)
-//{
-//    for (int i=0;i<RainMat.rows;i++)
-//    {
-//        for (int j=0;j<RainMat.cols;j++)
-//        {
-//            cout<<RainMat.at<float>(i,j)<<"  ";
-//        }
-//        cout<<endl;
-//    }
-//}
-
-//
-////show the element of vector
-//void showVector(vector<int> index)
-//{
-//    for (int i=0;i<index.size();i++)
-//    {
-//        cout<<index[i]<<endl;
-//    }
-//}
-//
-
-//void showMatVector(vector<Mat> neighbor)
-//{
-//    for (int e=0;e<neighbor.size();e++)
-//    {
-//        showMat(neighbor[e]);
-//    }
-//}
 //Training function
 void Trainging()
 {
@@ -315,6 +285,9 @@ int testing(Mat x, Mat y)
 
 int main(int argc, const char *argv[])
 {
+
+    
+
     //the number which test true
     int TrueNum = 0;
     //the Total sample which be tested
