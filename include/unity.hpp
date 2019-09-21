@@ -1,3 +1,9 @@
+#pragma once
+#include <opencv2/core.hpp>
+#include <vector>
+using namespace cv;
+using namespace std;
+
 #ifndef _UNITY
 #define _UNITY
 //show the element of mat(used to test code)

@@ -1,4 +1,9 @@
 #include "unity.hpp"
+#include <opencv2/core.hpp>
+#include <vector>
+using namespace cv;
+using namespace std;
+
 //show the element of mat(used to test code)
 void showMat(Mat RainMat)
 {

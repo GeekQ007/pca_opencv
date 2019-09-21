@@ -10,8 +10,8 @@
 using namespace cv;
 using namespace std;
 
-const double u = 0.01f;
-const double v = 0.01f;   //the global parameter
+const float u = 0.01f;
+const float v = 0.01f;   //the global parameter
 const int MNeighbor = 40; //the M nearest neighbors
 // Number of components to keep for the PCA
 const int num_components = 10;
@@ -22,7 +22,7 @@ vector<int> MneighborIndex;
 //the number of object which used to training
 const int Training_ObjectNum = 5;
 //the number of image that each object used
-const int Training_ImageNum = 10;
+const int Training_ImageNum = 20;
 //the number of object used to testing
 const int Test_ObjectNum = 5;
 //the image number
@@ -129,7 +129,10 @@ void Trainging()
     Mat mat_trans_eigen;
     Mat temp_data = data.clone();
     Mat temp_eigenvector = pca.eigenvectors.clone();
-    gemm(temp_data, temp_eigenvector, 1, Mat(), 0, mat_trans_eigen, GEMM_1_T);
+    cout << temp_data.rows << " " << temp_data.cols << endl;
+    cout << temp_eigenvector.rows << " " << temp_eigenvector.cols << endl;
+
+    gemm(temp_data, temp_eigenvector, 1, Mat(), 0, mat_trans_eigen, GEMM_2_T);
     //save the eigenvectors
     FileStorage fs("./eigenvector.xml", FileStorage::WRITE);
     fs << "eigenvector" << eigenvectors;
@@ -323,7 +326,7 @@ int main(int argc, const char *argv[])
 
                 Mat De_deminsion_test;
                 // get the test sample which decrease the dimensionality
-                gemm(TestSample_Row, mat_eigenvector, 1, Mat(), 0, De_deminsion_test, GEMM_1_T);
+                gemm(TestSample_Row, mat_eigenvector, 1, Mat(), 0, De_deminsion_test, GEMM_2_T);
                 //cout<<"the test sample"<<endl;
                 //showMat(De_deminsion_test.t());
                 //cout<<"the training samples"<<endl;
@@ -339,10 +342,10 @@ int main(int argc, const char *argv[])
                 MneighborMat.clear(); //及时清除空间
             }
             cout << "第" << Int_String(i) << "类测试正确的图片数:  " << Int_String(ClassTestNum)+"  "
-                 << ClassTestNum / Test_ImageNum << endl;
+                 << (float)ClassTestNum / Test_ImageNum << endl;
         }
         fs.release();
-        cout << "总的测试正确率: " << TrueNum / TotalNum << endl;
+        cout << "总的测试正确率: " << (float)TrueNum / TotalNum << endl;
     }
     else
 

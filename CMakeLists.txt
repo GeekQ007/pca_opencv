@@ -19,7 +19,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 set(DIR_SRCS main.cpp)
 
 # 添加包含源文件的子目录(工作目录的次一级子目录)
-aux_source_directory(src)
+aux_source_directory(src DIR_SUB_SRC)
 
 # 包含头文件目录
 include_directories(include)
